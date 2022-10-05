@@ -19,7 +19,8 @@ import (
 
 const (
 	// file version needed by ORBSLAM.
-	fileVersion = "1.0"
+	fileVersion         = "1.0"
+	yamlFilePrefixBytes = "%YAML:1.0\n"
 )
 
 // orbCamMaker takes in the camera properties and config params for orbslam and constructs a ORBsettings struct to use with yaml.Marshal.
@@ -135,19 +136,21 @@ func (slamSvc *builtIn) orbGenYAML(ctx context.Context, cam camera.Camera) error
 	}
 
 	// TODO change time format to .Format(time.RFC3339Nano) https://viam.atlassian.net/browse/DATA-277
-	// Check for maps in the specified directory and add map specifications to yaml config
+	timeStampNow := time.Now().UTC().Format(slamTimeFormat)
+	saveMapName := filepath.Join(slamSvc.dataDirectory, "map", slamSvc.cameraName+"_data_"+timeStampNow)
+	// timestamp to save at end of run
+	orbslam.SaveMapLoc = "\"" + saveMapName + "\""
+
+	// Check for maps in the specified directory and add map to yaml config
 	loadMapTimeStamp, loadMapName, err := slamSvc.checkMaps()
 	if err != nil {
 		slamSvc.logger.Debugf("Error occurred while parsing %s for maps, building map from scratch", slamSvc.dataDirectory)
 	}
 	if loadMapTimeStamp == "" {
-		loadMapTimeStamp = time.Now().UTC().Format(slamTimeFormat)
+		loadMapTimeStamp = timeStampNow
 	} else {
-		orbslam.LoadMapLoc = loadMapName
+		orbslam.LoadMapLoc = "\"" + loadMapName + "\""
 	}
-	saveMapTimeStamp := time.Now().UTC().Format(slamTimeFormat) // timestamp to save at end of run
-	saveMapName := filepath.Join(slamSvc.dataDirectory, "map", slamSvc.cameraName+"_data_"+saveMapTimeStamp)
-	orbslam.SaveMapLoc = saveMapName
 
 	// yamlFileName uses the timestamp from the loaded map if one was available
 	// this gives the option to load images into the map if they were generated at a later time
@@ -159,14 +162,14 @@ func (slamSvc *builtIn) orbGenYAML(ctx context.Context, cam camera.Camera) error
 	if err != nil {
 		return errors.Wrap(err, "Error while Marshaling YAML file")
 	}
-	addLine := "%YAML:1.0\n"
+
 	//nolint:gosec
 	outfile, err := os.Create(yamlFileName)
 	if err != nil {
 		return err
 	}
 
-	if _, err = outfile.WriteString(addLine); err != nil {
+	if _, err = outfile.WriteString(yamlFilePrefixBytes); err != nil {
 		return err
 	}
 

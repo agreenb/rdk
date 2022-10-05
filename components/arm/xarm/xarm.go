@@ -26,8 +26,8 @@ import (
 // AttrConfig is used for converting config attributes.
 type AttrConfig struct {
 	Host         string  `json:"host"`
-	Speed        float32 `json:"speed"`        // deg/s
-	Acceleration float32 `json:"acceleration"` // deg/s/s
+	Speed        float32 `json:"speed_degs_per_sec"`
+	Acceleration float32 `json:"acceleration_degs_per_sec_per_sec"`
 }
 
 const (
@@ -110,9 +110,9 @@ func NewxArm(ctx context.Context, r robot.Robot, cfg config.Component, logger go
 	var model referenceframe.Model
 	switch dof {
 	case 6:
-		model, err = referenceframe.UnmarshalModelJSON(xArm6modeljson, "")
+		model, err = referenceframe.UnmarshalModelJSON(xArm6modeljson, cfg.Name)
 	case 7:
-		model, err = referenceframe.UnmarshalModelJSON(xArm7modeljson, "")
+		model, err = referenceframe.UnmarshalModelJSON(xArm7modeljson, cfg.Name)
 	default:
 		err = errors.New("no kinematics model for xarm with specified degrees of freedom")
 	}

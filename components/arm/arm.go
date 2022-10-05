@@ -3,11 +3,11 @@ package arm
 
 import (
 	"context"
+	"errors"
 	"math"
 	"sync"
 
 	"github.com/edaniels/golog"
-	"github.com/pkg/errors"
 	commonpb "go.viam.com/api/common/v1"
 	pb "go.viam.com/api/component/arm/v1"
 	viamutils "go.viam.com/utils"
@@ -20,7 +20,6 @@ import (
 	"go.viam.com/rdk/referenceframe"
 	"go.viam.com/rdk/registry"
 	"go.viam.com/rdk/resource"
-	"go.viam.com/rdk/rlog"
 	"go.viam.com/rdk/robot"
 	"go.viam.com/rdk/robot/framesystem"
 	"go.viam.com/rdk/spatialmath"
@@ -278,7 +277,7 @@ func (r *reconfigurableArm) reconfigure(ctx context.Context, newArm resource.Rec
 		return utils.NewUnexpectedTypeError(r, newArm)
 	}
 	if err := viamutils.TryClose(ctx, r.actual); err != nil {
-		rlog.Logger.Errorw("error closing old", "error", err)
+		golog.Global().Errorw("error closing old", "error", err)
 	}
 	r.actual = arm.actual
 	return nil
@@ -313,7 +312,7 @@ func (r *reconfigurableLocalArm) Reconfigure(ctx context.Context, newArm resourc
 		return utils.NewUnexpectedTypeError(r, newArm)
 	}
 	if err := viamutils.TryClose(ctx, r.actual); err != nil {
-		rlog.Logger.Errorw("error closing old", "error", err)
+		golog.Global().Errorw("error closing old", "error", err)
 	}
 
 	r.actual = arm.actual
@@ -405,10 +404,28 @@ func Plan(
 		return nil, err
 	}
 	armName := a.ModelFrame().Name()
-
 	destination := referenceframe.NewPoseInFrame(armName+"_origin", spatialmath.NewPoseFromProtobuf(dst))
 
-	solutionMap, err := motionplan.PlanRobotMotion(ctx, destination, a.ModelFrame(), r, fs, worldState, defaultArmPlannerOptions)
+	var solutionMap []map[string][]referenceframe.Input
+
+	// PlanRobotMotion needs a frame system which contains the frame being solved for
+	if fs.Frame(armName) == nil {
+		if worldState != nil {
+			if len(worldState.Obstacles) != 0 || len(worldState.InteractionSpaces) != 0 || len(worldState.Transforms) != 0 {
+				return nil, errors.New("arm must be in frame system to use worldstate")
+			}
+		}
+
+		// ephemerally create a framesystem containing just the arm for the solve
+		fs = referenceframe.NewEmptySimpleFrameSystem("")
+		err := fs.AddFrame(a.ModelFrame(), fs.World())
+		if err != nil {
+			return nil, err
+		}
+		destination = referenceframe.NewPoseInFrame(referenceframe.World, spatialmath.NewPoseFromProtobuf(dst))
+	}
+
+	solutionMap, err = motionplan.PlanRobotMotion(ctx, destination, a.ModelFrame(), r, fs, worldState, defaultArmPlannerOptions)
 	if err != nil {
 		return nil, err
 	}

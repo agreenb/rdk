@@ -91,18 +91,18 @@ func getPortMutex(port string) *sync.Mutex {
 
 // AttrConfig is used for converting Arm config attributes.
 type AttrConfig struct {
-	UsbPort       string `json:"usb_port"`
-	BaudRate      string `json:"baud_rate"`
+	UsbPort       string `json:"serial_path"`
+	BaudRate      string `json:"serial_baud_rate"`
 	ArmServoCount string `json:"arm_servo_count"`
 }
 
 // Validate ensures all parts of the config are valid.
 func (config *AttrConfig) Validate(path string) error {
 	if len(config.UsbPort) == 0 {
-		return errors.New("expected nonempty usb_port")
+		return errors.New("expected nonempty serial_path")
 	}
 	if len(config.BaudRate) == 0 {
-		return errors.New("expected nonempty baud_rate")
+		return errors.New("expected nonempty serial_baud_rate")
 	}
 	if len(config.ArmServoCount) == 0 {
 		return errors.New("expected nonempty arm_servo_count")
@@ -120,25 +120,26 @@ var vx300smodeljson []byte
 func init() {
 	registry.RegisterComponent(arm.Subtype, "trossen-wx250s", registry.Component{
 		RobotConstructor: func(ctx context.Context, r robot.Robot, config config.Component, logger golog.Logger) (interface{}, error) {
-			return NewArm(r, config.Attributes, logger, wx250smodeljson)
+			return NewArm(r, config, logger, wx250smodeljson)
 		},
 	})
 	registry.RegisterComponent(arm.Subtype, "trossen-vx300s", registry.Component{
 		RobotConstructor: func(ctx context.Context, r robot.Robot, config config.Component, logger golog.Logger) (interface{}, error) {
-			return NewArm(r, config.Attributes, logger, vx300smodeljson)
+			return NewArm(r, config, logger, vx300smodeljson)
 		},
 	})
 }
 
 // NewArm returns an instance of Arm given a model json.
-func NewArm(r robot.Robot, attributes config.AttributeMap, logger golog.Logger, json []byte) (arm.LocalArm, error) {
-	usbPort := attributes.String("usb_port")
-	servos, err := findServos(usbPort, attributes.String("baud_rate"), attributes.String("arm_servo_count"))
+func NewArm(r robot.Robot, cfg config.Component, logger golog.Logger, json []byte) (arm.LocalArm, error) {
+	attributes := cfg.Attributes
+	usbPort := attributes.String("serial_path")
+	servos, err := findServos(usbPort, attributes.String("serial_baud_rate"), attributes.String("arm_servo_count"))
 	if err != nil {
 		return nil, err
 	}
 
-	model, err := referenceframe.UnmarshalModelJSON(json, "")
+	model, err := referenceframe.UnmarshalModelJSON(json, cfg.Name)
 	if err != nil {
 		return nil, err
 	}
