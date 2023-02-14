@@ -411,6 +411,9 @@ func (svc *builtIn) Update(ctx context.Context, cfg *config.Config) error {
 	}
 	if svcConfig.CaptureDir != "" {
 		svc.captureDir = svcConfig.CaptureDir
+	} else {
+		// Use default if the capture directory is not set or cleared.
+		svc.captureDir = viamCaptureDotDir
 	}
 	svc.captureDisabled = svcConfig.CaptureDisabled
 	// Service is disabled, so close all collectors and clear the map so we can instantiate new ones if we enable this service.
