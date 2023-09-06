@@ -99,11 +99,11 @@ func (s *syncer) SetArbitraryFileTags(tags []string) {
 
 func (s *syncer) SyncFile(path string) {
 	s.backgroundWorkers.Add(1)
-	// s.workerPool <- struct{}{}
+	s.workerPool <- struct{}{}
 	goutils.PanicCapturingGo(func() {
-		// defer func() {
-		// 	<-s.workerPool
-		// }()
+		defer func() {
+			<-s.workerPool
+		}()
 		defer s.backgroundWorkers.Done()
 		select {
 		case <-s.cancelCtx.Done():
