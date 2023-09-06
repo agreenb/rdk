@@ -2,6 +2,8 @@ package datasync
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/docker/go-units"
 	"github.com/pkg/errors"
@@ -51,6 +53,7 @@ func uploadDataCaptureFile(ctx context.Context, client v1.DataSyncServiceClient,
 		toUpload := sensorData[0]
 
 		// First send metadata.
+		startTime := time.Now()
 		streamMD := &v1.StreamingDataCaptureUploadRequest_Metadata{
 			Metadata: &v1.DataCaptureUploadMetadata{
 				UploadMetadata: uploadMD,
@@ -69,6 +72,7 @@ func uploadDataCaptureFile(ctx context.Context, client v1.DataSyncServiceClient,
 		if _, err := c.CloseAndRecv(); err != nil {
 			return errors.Wrap(err, "error receiving upload response")
 		}
+		fmt.Println("Done", time.Since(startTime))
 	} else {
 		ur := &v1.DataCaptureUploadRequest{
 			Metadata:       uploadMD,
@@ -107,6 +111,7 @@ func sendStreamingDCRequests(ctx context.Context, stream v1.DataSyncService_Stre
 			}
 
 			// Send request
+			time.Sleep(time.Millisecond)
 			if err := stream.Send(uploadReq); err != nil {
 				return err
 			}

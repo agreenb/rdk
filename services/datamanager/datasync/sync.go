@@ -26,6 +26,7 @@ var (
 	// RetryExponentialFactor defines the factor by which the retry wait time increases.
 	RetryExponentialFactor = atomic.NewInt32(2)
 	maxRetryInterval       = time.Hour
+	maxNumWorkers          = 10
 )
 
 // Manager is responsible for enqueuing files in captureDir and uploading them to the cloud.
@@ -51,6 +52,8 @@ type syncer struct {
 	syncErrs   chan error
 	closed     atomic.Bool
 	logRoutine sync.WaitGroup
+
+	workerPool chan struct{}
 }
 
 // ManagerConstructor is a function for building a Manager.
@@ -59,6 +62,7 @@ type ManagerConstructor func(identity string, client v1.DataSyncServiceClient, l
 // NewManager returns a new syncer.
 func NewManager(identity string, client v1.DataSyncServiceClient, logger golog.Logger) (Manager, error) {
 	cancelCtx, cancelFunc := context.WithCancel(context.Background())
+
 	ret := syncer{
 		partID:            identity,
 		client:            client,
@@ -68,6 +72,7 @@ func NewManager(identity string, client v1.DataSyncServiceClient, logger golog.L
 		arbitraryFileTags: []string{},
 		inProgress:        make(map[string]bool),
 		syncErrs:          make(chan error, 10),
+		workerPool:        make(chan struct{}, maxNumWorkers),
 	}
 	ret.logRoutine.Add(1)
 	goutils.PanicCapturingGo(func() {
@@ -94,7 +99,11 @@ func (s *syncer) SetArbitraryFileTags(tags []string) {
 
 func (s *syncer) SyncFile(path string) {
 	s.backgroundWorkers.Add(1)
+	// s.workerPool <- struct{}{}
 	goutils.PanicCapturingGo(func() {
+		// defer func() {
+		// 	<-s.workerPool
+		// }()
 		defer s.backgroundWorkers.Done()
 		select {
 		case <-s.cancelCtx.Done():
