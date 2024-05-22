@@ -11,6 +11,7 @@ import (
 	"github.com/urfave/cli/v2"
 	"go.uber.org/multierr"
 	mltrainingpb "go.viam.com/api/app/mltraining/v1"
+	v1 "go.viam.com/api/app/packages/v1"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -33,16 +34,15 @@ func MLSubmitCustomTrainingJob(c *cli.Context) error {
 		return err
 	}
 
-	err = client.uploadTrainingScript(true, c.String(trainFlagModelType), c.String(mlTrainingFlagFramework),
+	resp, err := client.uploadTrainingScript(true, c.String(trainFlagModelType), c.String(mlTrainingFlagFramework),
 		c.String(trainFlagModelOrgID), c.String(mlTrainingFlagName), c.String(mlTrainingFlagVersion),
 		c.Path(mlTrainingFlagPath))
 	if err != nil {
 		return err
 	}
 	registryItemID := fmt.Sprintf("%s:%s", c.String(trainFlagModelOrgID), c.String(mlTrainingFlagName))
-	printf(c.App.Writer, "successfully uploaded training script to %s", registryItemID)
 	trainingJobID, err := client.mlSubmitCustomTrainingJob(
-		c.String(datasetFlagDatasetID), registryItemID, c.String(mlTrainingFlagVersion), c.String(trainFlagModelOrgID),
+		c.String(datasetFlagDatasetID), registryItemID, resp.GetVersion(), c.String(trainFlagModelOrgID),
 		c.String(trainFlagModelName), c.String(trainFlagModelVersion))
 	if err != nil {
 		return err
@@ -105,6 +105,9 @@ func (c *viamClient) mlSubmitCustomTrainingJob(datasetID, registryItemID, regist
 	}
 	if modelVersion == "" {
 		modelVersion = time.Now().Format("2006-01-02T15-04-05")
+	}
+	if registryItemVersion == "" {
+		registryItemVersion = modelVersion
 	}
 
 	resp, err := c.mlTrainingClient.SubmitCustomTrainingJob(context.Background(),
@@ -234,7 +237,7 @@ func MLTrainingUploadAction(c *cli.Context) error {
 		return err
 	}
 
-	err = client.uploadTrainingScript(c.Bool(mlTrainingFlagDraft), c.String(mlTrainingFlagType),
+	_, err = client.uploadTrainingScript(c.Bool(mlTrainingFlagDraft), c.String(mlTrainingFlagType),
 		c.String(mlTrainingFlagFramework), c.String(generalFlagOrgID), c.String(mlTrainingFlagName),
 		c.String(mlTrainingFlagVersion), c.Path(mlTrainingFlagPath),
 	)
@@ -251,27 +254,27 @@ func MLTrainingUploadAction(c *cli.Context) error {
 	return nil
 }
 
-func (c *viamClient) uploadTrainingScript(draft bool, modelType, framework, orgID, name, version, path string) error {
+func (c *viamClient) uploadTrainingScript(draft bool, modelType, framework, orgID, name, version, path string) (*v1.CreatePackageResponse, error) {
 	metadata, err := createMetadata(draft, modelType, framework)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	metadataStruct, err := convertMetadataToStruct(*metadata)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	if _, err := c.uploadPackage(orgID,
+	resp, err := c.uploadPackage(orgID,
 		name,
 		version,
 		string(PackageTypeMLTraining),
 		path,
-		metadataStruct,
-	); err != nil {
-		return err
+		metadataStruct)
+	if err != nil {
+		return nil, err
 	}
 
-	return nil
+	return resp, nil
 }
 
 // ModelType refers to the type of the model.
